@@ -190,17 +190,22 @@ def build_weight_matrices(
     W2 = KNN.from_array(coords, k=6)
     W2.transform = "r"
 
-    # W3 – Feature / functional similarity (75th percentile)
-    thresh = np.percentile(sim[np.triu_indices(N, 1)], 75)
+    # W3 – Feature / functional similarity (70th percentile) + guarantee ≥1 neighbor
+    thresh = np.percentile(sim[np.triu_indices(N, 1)], 70)
     W3_raw = (sim > thresh).astype(float)
     np.fill_diagonal(W3_raw, 0.0)
+    for i in range(N):
+        if W3_raw[i].sum() == 0:
+            j = int(np.argsort(sim[i])[::-1][1])  # strongest non-self link
+            W3_raw[i, j] = 1.0
+            W3_raw[j, i] = 1.0
     neighbors_W3 = {i: list(np.where(W3_raw[i] > 0)[0]) for i in range(N)}
     weights_W3 = {i: [1.0] * len(neighbors_W3[i]) for i in range(N)}
-    W3 = W(neighbors_W3, weights_W3)
+    W3 = W(neighbors_W3, weights_W3, silence_warnings=True)
     W3.transform = "r"
 
-    # W4 – Contiguity (DistanceBand). Silence island warnings.
-    thresh_dist = np.percentile(dist[np.isfinite(dist)], 15)  # slightly higher than original 12
+    # W4 – Contiguity (DistanceBand). Higher percentile reduces islands.
+    thresh_dist = np.percentile(dist[np.isfinite(dist)], 20)
     W4 = DistanceBand.from_array(
         coords, threshold=thresh_dist, binary=True, silence_warnings=True
     )
